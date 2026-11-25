@@ -1,7 +1,8 @@
+Package · JSON
 {
   "name": "funk-miniapp",
   "version": "1.0.0",
-  "description": "Telegram Mini App: funk musiqa pleyeri (Jamendo)",
+  "description": "Telegram bot + Mini App: botga yuborilgan treklarni qorli pleyerda eshitish",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
