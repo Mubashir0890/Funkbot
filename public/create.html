@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Funk Yaratish</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #14101f);
+    --text: var(--tg-theme-text-color, #fff);
+    --hint: var(--tg-theme-hint-color, #9a93b5);
+    --card: var(--tg-theme-secondary-bg-color, #1f1833);
+    --accent: #ff8a00;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 16px 16px 40px; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  nav { display: flex; gap: 8px; margin-bottom: 16px; }
+  nav a { flex: 1; text-align: center; padding: 10px; border-radius: 12px; background: var(--card); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
+  nav a.on { background: var(--accent); color: #000; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .row label { width: 78px; font-size: 13px; color: var(--hint); }
+  .row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row .val { width: 44px; text-align: right; font-size: 13px; }
+  select { flex: 1; padding: 10px; border-radius: 10px; border: none; background: var(--card); color: var(--text); font-size: 14px; }
+  .btns { display: flex; gap: 8px; margin: 14px 0; }
+  .btns button { flex: 1; padding: 14px 8px; border: none; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; background: var(--card); color: var(--text); }
+  .btns button.main { background: var(--accent); color: #000; }
+  .grid { background: var(--card); border-radius: 14px; padding: 10px; }
+  .lane { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .lane:last-child { margin-bottom: 0; }
+  .lane .nm { width: 46px; font-size: 11px; color: var(--hint); cursor: pointer; user-select: none; }
+  .lane.muted .nm { text-decoration: line-through; opacity: .5; }
+  .cells { flex: 1; display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; }
+  .cell { aspect-ratio: 1; border-radius: 3px; background: rgba(255,255,255,.07); }
+  .cell:nth-child(4n+1) { background: rgba(255,255,255,.12); }
+  .cell.on { background: var(--accent); }
+  .cell.on.soft { opacity: .5; }
+  .cell.cur { outline: 2px solid #fff; }
+  .lane.muted .cell.on { opacity: .25; }
+  .hint { font-size: 12px; color: var(--hint); margin-top: 10px; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <h1>🎷 Funk Yaratish</h1>
+  <nav>
+    <a href="/">🎶 Pleyer</a>
+    <a href="/create.html" class="on">🥁 Yaratish</a>
+  </nav>
+
+  <div class="row"><label>Uslub</label>
+    <select id="style">
+      <option value="mont" selected>Montagem (Braziliya funk)</option>
+      <option value="funk">Klassik funk</option>
+    </select>
+  </div>
+  <div class="row"><label>Tempo</label><input type="range" id="bpm" min="80" max="160" value="130"><span class="val" id="bpmv">130</span></div>
+  <div class="row"><label>Swing</label><input type="range" id="swing" min="0" max="60" value="0"><span class="val" id="swingv">0%</span></div>
+  <div class="row"><label>Tonallik</label>
+    <select id="key">
+      <option value="0">C</option><option value="1">C#</option><option value="2">D</option><option value="3">D#</option>
+      <option value="4">E</option><option value="5">F</option><option value="6">F#</option><option value="7">G</option>
+      <option value="8">G#</option><option value="9" selected>A</option><option value="10">A#</option><option value="11">B</option>
+    </select>
+  </div>
+
+  <div class="btns">
+    <button id="play" class="main">▶ Ijro</button>
+    <button id="rand">🎲 Random</button>
+    <button id="wav">💾 WAV</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <div class="hint">Montagem rejimi: tamborzão ritmi, 808 kick va cowbell kuyi (130 BPM atrofida). Telefon dinamigi past basni yaxshi chiqarmaydi, quloqchin bilan eshiting. Qator nomini bosing, shu asbob o'chadi/yoqiladi. Random har safar yangi groove yaratadi. WAV 4 taktli loop'ni 2 marta takrorlab yuklab beradi. Telegram ichida yuklab olish ishlamasa, sahifani brauzerda oching.</div>
+
+<script>
+  const tg = window.Telegram.WebApp; tg.ready(); tg.expand();
+  const $ = (id) => document.getElementById(id);
+  const STEPS = 16;
+  const LANES = [
+    ["cow", "Cowbell"], ["chord", "Akkord"], ["bass", "Bas"], ["hat", "Hi-hat"], ["snare", "Clap"], ["kick", "Kick"],
+  ];
+  const muted = { kick: false, snare: false, hat: false, bass: false, chord: false, cow: false };
+  let pat = null;
+
+  const rnd = (p) => Math.random() < p;
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+  // ---------- Groove yaratish ----------
+  function generate() {
+    return $("style").value === "mont" ? generateMont() : generateFunk();
+  }
+
+  // Montagem / funk carioca: tamborzão (3+3+3+3+2+2), og'ir 808 kick, cowbell kuyi
+  function generateMont() {
+    const kick = Array(STEPS).fill(0);
+    [0, 3, 6, 9, 12, 14].forEach((s) => (kick[s] = 1));
+    if (rnd(0.3)) kick[15] = 0.7;
+
+    const snare = Array(STEPS).fill(0);
+    snare[4] = 1; snare[12] = 1;
+    if (rnd(0.35)) snare[14] = 0.5;
+    if (rnd(0.35)) snare[15] = 0.5;
+    if (rnd(0.25)) snare[10] = 0.5;
+
+    const accent = [1, .4, .7, .4, 1, .4, .7, .4, 1, .4, .7, .4, 1, .4, .7, .5];
+    const hat = accent.map((v) => (rnd(0.9) ? v : 0));
+    const openHat = rnd(0.5) ? pick([7, 15]) : -1;
+
+    const scale = [0, 3, 5, 7, 10, 12, 15];
+    const motif = Array.from({ length: pick([3, 4]) }, () => pick(scale));
+    const cow = Array(STEPS).fill(null);
+    let idx = 0;
+    [0, 3, 6, 8, 10, 12, 14].forEach((s) => {
+      if (s === 0 || rnd(0.7)) cow[s] = motif[idx++ % motif.length];
+    });
+
+    return {
+      style: "mont", kick, snare, hat, openHat,
+      bass: Array(STEPS).fill(null), chord: Array(STEPS).fill(0), cow, minor: true,
+    };
+  }
+
+  function generateFunk() {
+    const kick = Array(STEPS).fill(0);
+    kick[0] = 1;
+    [3, 6, 7, 10, 11, 14].forEach((s) => { if (rnd(0.35)) kick[s] = 1; });
+    if (rnd(0.5)) kick[8] = 1;
+
+    const snare = Array(STEPS).fill(0);
+    snare[4] = 1; snare[12] = 1;
+    [7, 9, 15, 2, 10].forEach((s) => { if (!snare[s] && rnd(0.25)) snare[s] = 0.3; });
+
+    const accent = [1, .35, .65, .4, .9, .35, .65, .4, 1, .35, .65, .4, .9, .35, .65, .45];
+    const hat = accent.map((v) => (rnd(0.85) ? v : 0));
+    const openHat = rnd(0.6) ? pick([6, 14]) : -1;
+
+    // Dorian: 0 2 3 5 7 9 10. Bas oktava pastda.
+    const tones = [0, 0, 0, 7, 10, 5, 12, 3, 2];
+    const bass = Array(STEPS).fill(null);
+    bass[0] = 0;
+    for (let s = 1; s < STEPS; s++) {
+      const p = [3, 6, 7, 10, 11, 14, 15].includes(s) ? 0.6 : 0.25;
+      if (rnd(p)) bass[s] = pick(tones);
+    }
+
+    const chord = Array(STEPS).fill(0);
+    [2, 5, 7, 10, 13].forEach((s) => { if (rnd(0.55)) chord[s] = 1; });
+    if (!chord.some(Boolean)) chord[5] = 1;
+    const minor = rnd(0.7);
+    return { style: "funk", kick, snare, hat, openHat, bass, chord, minor, cow: Array(STEPS).fill(null) };
+  }
+
+  // ---------- Tovushlar ----------
+  const noiseCache = new WeakMap();
+  function noiseBuf(ctx) {
+    if (!noiseCache.has(ctx)) {
+      const b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      noiseCache.set(ctx, b);
+    }
+    return noiseCache.get(ctx);
+  }
+  function env(g, t, a, peak, d) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  }
+  function kickHit(ctx, out, t, v) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    env(g, t, 0.002, 1.0 * v, 0.28);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 0.35);
+  }
+  let satCurve = null;
+  function kick808(ctx, out, t, v, midi) {
+    if (!satCurve) {
+      satCurve = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) satCurve[i] = Math.tanh(3 * ((i / 1023) * 2 - 1));
+    }
+    const f = mtof(midi);
+    const o = ctx.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(f * 3, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.07);
+    const ws = ctx.createWaveShaper(); ws.curve = satCurve;
+    const g = ctx.createGain(); env(g, t, 0.002, 0.9 * v, 0.45);
+    o.connect(ws).connect(g).connect(out); o.start(t); o.stop(t + 0.55);
+  }
+  function cowbell(ctx, out, t, midi, len) {
+    const f = mtof(midi);
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = f * 2.2; bp.Q.value = 1.2;
+    const g = ctx.createGain(); env(g, t, 0.001, 0.3, len);
+    [f, f * 1.4983].forEach((fr) => {
+      const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = fr;
+      o.connect(bp); o.start(t); o.stop(t + len + 0.05);
+    });
+    bp.connect(g).connect(out);
+  }
+  function snareHit(ctx, out, t, v) {
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx);
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1500;
+    const g = ctx.createGain(); env(g, t, 0.001, 0.55 * v, 0.16);
+    n.connect(hp).connect(g).connect(out); n.start(t); n.stop(t + 0.2);
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = "triangle"; o.frequency.setValueAtTime(220, t);
+    o.frequency.exponentialRampToValueAtTime(160, t + 0.08);
+    env(og, t, 0.001, 0.4 * v, 0.1);
+    o.connect(og).connect(out); o.start(t); o.stop(t + 0.15);
+  }
+  function hatHit(ctx, out, t, v, open) {
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf(ctx);
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 7500;
+    const g = ctx.createGain(); env(g, t, 0.001, 0.22 * v, open ? 0.22 : 0.04);
+    n.connect(hp).connect(g).connect(out); n.start(t); n.stop(t + (open ? 0.3 : 0.1));
+  }
+  function bassNote(ctx, out, t, midi, len) {
+    const f = mtof(midi);
+    const o = ctx.createOscillator(), s = ctx.createOscillator();
+    o.type = "sawtooth"; s.type = "sine"; o.frequency.value = f; s.frequency.value = f;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.Q.value = 6;
+    lp.frequency.setValueAtTime(1400, t);
+    lp.frequency.exponentialRampToValueAtTime(250, t + len);
+    const g = ctx.createGain(); env(g, t, 0.004, 0.5, len);
+    o.connect(lp); s.connect(lp); lp.connect(g).connect(out);
+    o.start(t); s.start(t); o.stop(t + len + 0.05); s.stop(t + len + 0.05);
+  }
+  function chordStab(ctx, out, t, rootMidi, minor, len) {
+    const iv = minor ? [0, 3, 7, 10, 14] : [0, 4, 7, 10, 14];
+    const g = ctx.createGain(); env(g, t, 0.003, 0.16, len);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.Q.value = 3;
+    lp.frequency.setValueAtTime(3500, t);
+    lp.frequency.exponentialRampToValueAtTime(600, t + len);
+    iv.forEach((i, k) => {
+      const o = ctx.createOscillator();
+      o.type = "sawtooth"; o.frequency.value = mtof(rootMidi + i);
+      o.detune.value = (k % 2 ? 6 : -6);
+      o.connect(lp); o.start(t); o.stop(t + len + 0.05);
+    });
+    lp.connect(g).connect(out);
+  }
+
+  // ---------- Bitta qadamni rejalashtirish (jonli va offline uchun umumiy) ----------
+  function scheduleStep(ctx, out, p, step, t, stepDur, key) {
+    const m = muted;
+    if (!m.kick && p.kick[step]) {
+      if (p.style === "mont") kick808(ctx, out, t, p.kick[step], 28 + key);
+      else kickHit(ctx, out, t, p.kick[step]);
+    }
+    if (!m.cow && p.cow[step] !== null) cowbell(ctx, out, t, 62 + key + p.cow[step], stepDur * 1.8);
+    if (!m.snare && p.snare[step]) snareHit(ctx, out, t, p.snare[step]);
+    if (!m.hat && p.hat[step]) hatHit(ctx, out, t, p.hat[step], false);
+    if (!m.hat && p.openHat === step) hatHit(ctx, out, t, 1, true);
+    if (!m.bass && p.bass[step] !== null) bassNote(ctx, out, t, 33 + key + p.bass[step], stepDur * 1.6);
+    if (!m.chord && p.chord[step]) chordStab(ctx, out, t, 57 + key, p.minor, stepDur * 1.4);
+  }
+  const swingOffset = (step, stepDur, sw) => (step % 2 ? stepDur * sw * 0.33 : 0);
+
+  // ---------- Jonli ijro ----------
+  let ctx = null, master = null, timer = null, playing = false;
+  let nextTime = 0, step = 0;
+  const queue = [];
+
+  function startPlay() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0.8;
+      const comp = ctx.createDynamicsCompressor();
+      master.connect(comp).connect(ctx.destination);
+    }
+    ctx.resume();
+    playing = true; step = 0; nextTime = ctx.currentTime + 0.08;
+    timer = setInterval(tick, 25);
+    $("play").textContent = "⏹ To'xtat";
+    requestAnimationFrame(draw);
+  }
+  function stopPlay() {
+    playing = false; clearInterval(timer);
+    $("play").textContent = "▶ Ijro";
+    queue.length = 0; markCursor(-1);
+  }
+  function tick() {
+    const bpm = +$("bpm").value, sw = +$("swing").value / 100, key = +$("key").value;
+    const stepDur = 60 / bpm / 4;
+    while (nextTime < ctx.currentTime + 0.12) {
+      const t = nextTime + swingOffset(step, stepDur, sw);
+      scheduleStep(ctx, master, pat, step, t, stepDur, key);
+      queue.push({ step, t });
+      nextTime += stepDur;
+      step = (step + 1) % STEPS;
+    }
+  }
+  function draw() {
+    if (!playing) return;
+    while (queue.length && queue[0].t <= ctx.currentTime) markCursor(queue.shift().step);
+    requestAnimationFrame(draw);
+  }
+
+  // ---------- Grid ----------
+  function buildGrid() {
+    $("grid").innerHTML = LANES.map(([k, nm]) =>
+      `<div class="lane ${muted[k] ? "muted" : ""}" data-k="${k}"><div class="nm">${nm}</div><div class="cells">` +
+      Array.from({ length: STEPS }, (_, s) => {
+        let on = false, soft = false;
+        if (k === "bass" || k === "cow") on = pat[k][s] !== null;
+        else if (k === "hat") { on = !!pat.hat[s] || pat.openHat === s; soft = pat.hat[s] < 0.5; }
+        else { on = !!pat[k][s]; soft = pat[k][s] && pat[k][s] < 1; }
+        return `<div class="cell ${on ? "on" : ""} ${on && soft ? "soft" : ""}" data-s="${s}"></div>`;
+      }).join("") + "</div></div>").join("");
+    document.querySelectorAll(".lane .nm").forEach((el) => {
+      el.onclick = () => {
+        const k = el.parentElement.dataset.k;
+        muted[k] = !muted[k];
+        el.parentElement.classList.toggle("muted", muted[k]);
+      };
+    });
+  }
+  function markCursor(s) {
+    document.querySelectorAll(".cell.cur").forEach((c) => c.classList.remove("cur"));
+    if (s < 0) return;
+    document.querySelectorAll(`.cell[data-s="${s}"]`).forEach((c) => c.classList.add("cur"));
+  }
+
+  // ---------- WAV eksport ----------
+  async function exportWav() {
+    const bpm = +$("bpm").value, sw = +$("swing").value / 100, key = +$("key").value;
+    const stepDur = 60 / bpm / 4;
+    const bars = 8; // 4 takt x 2
+    const total = bars * STEPS * stepDur + 1.5;
+    const sr = 44100;
+    const oc = new OfflineAudioContext(2, Math.ceil(total * sr), sr);
+    const mg = oc.createGain(); mg.gain.value = 0.8;
+    const comp = oc.createDynamicsCompressor();
+    mg.connect(comp).connect(oc.destination);
+    for (let n = 0; n < bars * STEPS; n++) {
+      const s = n % STEPS;
+      scheduleStep(oc, mg, pat, s, n * stepDur + swingOffset(s, stepDur, sw) + 0.05, stepDur, key);
+    }
+    $("wav").textContent = "⏳ ...";
+    const buf = await oc.startRendering();
+    const blob = toWav(buf);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `funk-${bpm}bpm.wav`;
+    document.body.appendChild(a); a.click(); a.remove();
+    $("wav").textContent = "💾 WAV";
+  }
+  function toWav(buf) {
+    const ch = buf.numberOfChannels, len = buf.length * ch * 2;
+    const ab = new ArrayBuffer(44 + len), v = new DataView(ab);
+    const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + len, true); w(8, "WAVEfmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+    v.setUint32(24, buf.sampleRate, true); v.setUint32(28, buf.sampleRate * ch * 2, true);
+    v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, len, true);
+    const data = Array.from({ length: ch }, (_, c) => buf.getChannelData(c));
+    let o = 44;
+    for (let i = 0; i < buf.length; i++)
+      for (let c = 0; c < ch; c++) {
+        const x = Math.max(-1, Math.min(1, data[c][i]));
+        v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true); o += 2;
+      }
+    return new Blob([ab], { type: "audio/wav" });
+  }
+
+  // ---------- Boshqaruv ----------
+  $("bpm").oninput = (e) => ($("bpmv").textContent = e.target.value);
+  $("swing").oninput = (e) => ($("swingv").textContent = e.target.value + "%");
+  $("play").onclick = () => (playing ? stopPlay() : startPlay());
+  $("rand").onclick = () => { pat = generate(); buildGrid(); };
+  $("style").onchange = () => {
+    const m = $("style").value === "mont";
+    $("bpm").value = m ? 130 : 104; $("bpmv").textContent = $("bpm").value;
+    $("swing").value = m ? 0 : 25; $("swingv").textContent = $("swing").value + "%";
+    pat = generate(); buildGrid();
+  };
+  $("wav").onclick = exportWav;
+
+  pat = generate(); buildGrid();
+</script>
+</body>
+</html>
