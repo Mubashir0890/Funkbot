@@ -9,5 +9,11 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false
-      - key: JAMENDO_CLIENT_ID
+      - key: ADMIN_ID
         sync: false
+      # Ixtiyoriy, lekin tavsiya etiladi: ro'yxat qayta ishga tushganda o'chib ketmasligi uchun
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GIST_ID
+        sync: false
+        
