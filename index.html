@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a1028" />
+<title>Funk</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Onest:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --night: #0a1028;
+    --indigo: #111c45;
+    --dusk: #2a2a58;
+    --snow: #f4f8ff;
+    --text: #eaf0ff;
+    --mute: #93a2c8;
+    --amber: #ffbf70;
+    --amber-hi: #ffe0ae;
+    --amber-lo: #ffa94d;
+    --line: rgba(255, 255, 255, .09);
+    --serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --sans: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { background: var(--night); }
+  body {
+    min-height: 100vh;
+    font-family: var(--sans);
+    color: var(--text);
+    background: linear-gradient(180deg, #0a1028 0%, #111c45 46%, #1b2552 76%, #2a2a58 100%) fixed;
+    overflow-x: hidden;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 10px; }
+
+  /* Osmon: sovuq ko'k, ufqdagi pushti va derazadan tushgan iliq yorug'lik */
+  .sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .glow { position: absolute; border-radius: 50%; will-change: transform; }
+  .g1 { width: 120vw; height: 90vw; left: -30vw; top: -30vw; background: radial-gradient(closest-side, rgba(110,150,255,.26), transparent); animation: drift1 38s ease-in-out infinite alternate; }
+  .g2 { width: 110vw; height: 90vw; right: -40vw; bottom: -20vw; background: radial-gradient(closest-side, rgba(255,170,90,.2), transparent); animation: drift2 44s ease-in-out infinite alternate; }
+  .g3 { width: 90vw; height: 70vw; left: -30vw; bottom: -25vw; background: radial-gradient(closest-side, rgba(210,120,150,.16), transparent); animation: drift1 52s ease-in-out infinite alternate-reverse; }
+  @keyframes drift1 { to { transform: translate3d(8vw, 6vw, 0); } }
+  @keyframes drift2 { to { transform: translate3d(-10vw, -5vw, 0); } }
+
+  #snow { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+
+  main { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; padding: 26px 16px calc(120px + var(--safe-b)); }
+
+  .top { padding: 0 6px 22px; }
+  .top h1 { font-family: var(--serif); font-weight: 400; font-size: 58px; line-height: .95; letter-spacing: -.02em; font-variation-settings: "opsz" 144; }
+  .top p { margin-top: 10px; color: var(--mute); font-size: 14px; }
+
+  /* Pleyer kartasi */
+  .hero {
+    position: relative; margin-top: 12px; padding: 20px 20px 22px; border-radius: 30px;
+    background: linear-gradient(165deg, rgba(255,255,255,.11), rgba(255,255,255,.04) 60%);
+    border: 1px solid var(--line);
